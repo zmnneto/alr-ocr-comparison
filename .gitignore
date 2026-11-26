@@ -1,0 +1,14 @@
+# Ambientes virtuais
+venv/
+.venv/
+
+# PyCharm
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Temporários
+.tmp/
