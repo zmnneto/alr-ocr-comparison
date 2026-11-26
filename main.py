@@ -83,11 +83,60 @@ def preprocessar_placa(placa):
     """
     Corrige gradientes de sombra, realça contraste e binariza para o Tesseract.
     """
-    # Normaliza a altura para 120px mantendo a proporção (estabiliza o tamanho da fonte)
     h, w = placa.shape[:2]
     escala = 120.0 / max(h, 1)
     redim = cv2.resize(placa, (int(w * escala), 120), interpolation=cv2.INTER_CUBIC)
 
     cinza = cv2.cvtColor(redim, cv2.COLOR_BGR2GRAY)
 
-    # Remoção de sombra: divide a
+    # Remoção de sombra: divide a imagem pelo fundo estimado com blur forte
+    fundo = cv2.GaussianBlur(cinza, (0, 0), sigmaX=31, sigmaY=31)
+    sem_sombra = cv2.divide(cinza, fundo, scale=255)
+
+    # Suavização leve + binarização de Otsu
+    blur = cv2.GaussianBlur(sem_sombra, (3, 3), 0)
+    _, binaria = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+    # Fecha riscos brancos da marca d'água dentro das letras pretas
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    binaria = cv2.morphologyEx(binaria, cv2.MORPH_OPEN, kernel)
+
+    # Margem branca para o Tesseract não ignorar o primeiro/último caractere
+    return cv2.copyMakeBorder(binaria, 20, 20, 20, 20, cv2.BORDER_CONSTANT, value=255)
+
+
+def ordem_numerica(caminho):
+    numeros = re.findall(r"\d+", os.path.basename(caminho))
+    return int(numeros[0]) if numeros else 0
+
+
+os.makedirs("debug_placas", exist_ok=True)
+resultados = []
+
+for caminho in sorted(glob.glob("dataset/*.*"), key=ordem_numerica):
+    img = cv2.imread(caminho)
+    nome = os.path.basename(caminho)
+    placa = extrair_placa_mercosul(img)
+
+    if placa is None:
+        linha = f"{nome}: NAO_DETECTADA"
+        resultados.append(linha)
+        print(linha, flush=True)
+        continue
+
+    binaria = preprocessar_placa(placa)
+
+    cv2.imwrite(f"debug_placas/crop_{nome}", placa)
+    cv2.imwrite(f"debug_placas/bin_{nome}", binaria)
+
+    texto = pytesseract.image_to_string(
+        binaria,
+        config="--oem 3 --psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+    ).strip()
+
+    linha = f"{nome}: {texto}"
+    resultados.append(linha)
+    print(linha, flush=True)
+
+with open("resultados_tesseract.txt", "w", encoding="utf-8") as f:
+    f.write("\n".join(resultados))
