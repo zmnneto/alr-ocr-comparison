@@ -1,0 +1,1 @@
+"""Módulos de segmentação, pré-processamento e OCR para placas Mercosul."""
