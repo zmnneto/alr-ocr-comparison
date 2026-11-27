@@ -225,3 +225,4 @@ def reconhecer_easyocr(dados_prep, reader):
 
     custo, texto, bruto, img_usada = melhor_fallback
     return texto, bruto, img_usada, custo
+
